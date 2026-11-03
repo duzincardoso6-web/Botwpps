@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🍕 Painel — Pizzaria Bella Massa</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f1115;
+    color: #e5e7eb;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 24px;
+    background: linear-gradient(135deg, #1a1d24 0%, #252932 100%);
+    border-radius: 16px; margin-bottom: 24px;
+    border: 1px solid #2d323d; flex-wrap: wrap; gap: 12px;
+  }
+  header h1 {
+    font-size: 24px; font-weight: 700;
+    background: linear-gradient(90deg, #fbbf24, #f97316);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  header .status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #9ca3af; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 10px #22c55e; animation: pulse 2s infinite; }
+  .dot.offline { background: #ef4444; box-shadow: 0 0 10px #ef4444; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: #1a1d24; border: 1px solid #2d323d; border-radius: 12px; padding: 16px; text-align: center; }
+  .stat-card .num { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+  .stat-card .label { font-size: 12px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-pendente .num { color: #fbbf24; }
+  .stat-preparo .num { color: #3b82f6; }
+  .stat-entrega .num { color: #a855f7; }
+  .stat-entregue .num { color: #22c55e; }
+
+  .filtros { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .filtro {
+    padding: 8px 16px; background: #1a1d24; border: 1px solid #2d323d;
+    border-radius: 20px; color: #9ca3af; cursor: pointer; font-size: 13px;
+    transition: all 0.2s; font-family: inherit;
+  }
+  .filtro:hover { border-color: #fbbf24; color: #fbbf24; }
+  .filtro.ativo { background: linear-gradient(135deg, #fbbf24, #f97316); border-color: transparent; color: #000; font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
+  .pedido { background: #1a1d24; border: 1px solid #2d323d; border-radius: 16px; overflow: hidden; transition: all 0.3s; animation: slideIn 0.4s ease-out; }
+  .pedido:hover { border-color: #3d4350; transform: translateY(-2px); }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+
+  .pedido-header { padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2d323d; }
+  .pedido-id { font-family: monospace; font-size: 12px; color: #6b7280; }
+  .badge { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .badge.pendente { background: #fbbf2422; color: #fbbf24; border: 1px solid #fbbf2455; }
+  .badge.em_preparo { background: #3b82f622; color: #3b82f6; border: 1px solid #3b82f655; }
+  .badge.saiu_entrega { background: #a855f722; color: #a855f7; border: 1px solid #a855f755; }
+  .badge.entregue { background: #22c55e22; color: #22c55e; border: 1px solid #22c55e55; }
+  .badge.cancelado { background: #ef444422; color: #ef4444; border: 1px solid #ef444455; }
+
+  .pedido-body { padding: 18px; }
+  .cliente { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .cliente .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, #fbbf24, #f97316);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; color: #000; font-size: 16px; flex-shrink: 0;
+  }
+  .cliente .info { flex: 1; min-width: 0; }
+  .cliente .nome { font-weight: 600; color: #f3f4f6; font-size: 15px; }
+  .cliente .fone { font-size: 12px; color: #9ca3af; font-family: monospace; }
+
+  .campo { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px dashed #2d323d; font-size: 13px; }
+  .campo:last-child { border-bottom: none; }
+  .campo .icone { font-size: 14px; flex-shrink: 0; }
+  .campo .valor { color: #d1d5db; flex: 1; word-break: break-word; }
+  .campo .valor strong { color: #f3f4f6; }
+
+  .itens { margin: 12px 0; padding: 12px; background: #0f1115; border-radius: 10px; font-size: 12px; }
+  .itens h4 { color: #9ca3af; font-size: 11px; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
+  .item { display: flex; justify-content: space-between; padding: 4px 0; color: #d1d5db; font-size: 12px; gap: 8px; }
+  .item .preco { color: #fbbf24; font-weight: 600; white-space: nowrap; }
+
+  .totais { margin-top: 12px; padding-top: 12px; border-top: 2px solid #2d323d; font-size: 13px; }
+  .linha-total { display: flex; justify-content: space-between; padding: 3px 0; color: #9ca3af; }
+  .linha-total .val { color: #d1d5db; }
+  .linha-total.grande { margin-top: 6px; padding-top: 8px; border-top: 1px dashed #2d323d; font-size: 16px; font-weight: 700; color: #f3f4f6; }
+  .linha-total.grande .val { color: #fbbf24; }
+
+  .acoes { padding: 12px 18px; background: #151820; border-top: 1px solid #2d323d; display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    flex: 1; padding: 10px; border: none; border-radius: 8px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: all 0.2s; display: flex; align-items: center;
+    justify-content: center; gap: 6px; min-width: 120px; font-family: inherit;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-preparo { background: #3b82f6; color: #fff; }
+  .btn-preparo:hover { background: #2563eb; }
+  .btn-entrega { background: #a855f7; color: #fff; }
+  .btn-entrega:hover { background: #9333ea; }
+  .btn-entregue { background: #22c55e; color: #000; }
+  .btn-entregue:hover { background: #16a34a; }
+  .btn-cancelar { background: #ef4444; color: #fff; }
+  .btn-cancelar:hover { background: #dc2626; }
+
+  .vazio { text-align: center; padding: 60px 20px; color: #6b7280; }
+  .vazio .emoji { font-size: 64px; margin-bottom: 16px; }
+
+  @media (max-width: 600px) {
+    body { padding: 12px; }
+    header { padding: 12px 16px; }
+    header h1 { font-size: 18px; }
+    .grid { grid-template-columns: 1fr; }
+  }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: #0f1115; }
+  ::-webkit-scrollbar-thumb { background: #2d323d; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3d4350; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🍕 Painel de Pedidos — Bella Massa</h1>
+  <div class="status">
+    <span class="dot" id="dotStatus"></span>
+    <span id="statusTexto">Conectando...</span>
+  </div>
+</header>
+
+<div class="stats">
+  <div class="stat-card stat-pendente"><div class="num" id="statPendente">0</div><div class="label">Pendentes</div></div>
+  <div class="stat-card stat-preparo"><div class="num" id="statPreparo">0</div><div class="label">Em preparo</div></div>
+  <div class="stat-card stat-entrega"><div class="num" id="statEntrega">0</div><div class="label">Saiu p/ entrega</div></div>
+  <div class="stat-card stat-entregue"><div class="num" id="statEntregue">0</div><div class="label">Entregues hoje</div></div>
+</div>
+
+<div class="filtros">
+  <button class="filtro ativo" data-filtro="todos">📋 Todos</button>
+  <button class="filtro" data-filtro="pendente">⏳ Pendentes</button>
+  <button class="filtro" data-filtro="em_preparo">👨‍🍳 Em preparo</button>
+  <button class="filtro" data-filtro="saiu_entrega">🛵 Saiu p/ entrega</button>
+  <button class="filtro" data-filtro="entregue">✅ Entregues</button>
+</div>
+
+<div id="gridPedidos" class="grid">
+  <div class="vazio"><div class="emoji">📭</div><p>Nenhum pedido ainda</p></div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://jwsmacdstifuhxplgpqj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3c21hY2RzdGlmdWh4cGxncHFqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM3MjQ2MjIsImV4cCI6MjEwOTMwMDYyMn0.7yQ6S0JYHtkflJw469QkOYLE0ZBENlsJmA8xJt0p4NM';
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let pedidos = [];
+let itensPorPedido = {};
+let filtroAtual = 'todos';
+
+async function carregarPedidos() {
+  const { data, error } = await supabase.from('pedidos').select('*').order('criado_em', { ascending: false }).limit(100);
+  if (error) { console.error('Erro:', error); return; }
+  pedidos = data || [];
+  await carregarItens();
+  renderizar();
+}
+
+async function carregarItens() {
+  const ids = pedidos.map(p => p.id);
+  if (ids.length === 0) return;
+  const { data, error } = await supabase.from('pedido_itens').select('*').in('pedido_id', ids);
+  if (error) { console.error('Erro itens:', error); return; }
+  itensPorPedido = {};
+  (data || []).forEach(item => {
+    if (!itensPorPedido[item.pedido_id]) itensPorPedido[item.pedido_id] = [];
+    itensPorPedido[item.pedido_id].push(item);
+  });
+}
+
+function configurarRealtime() {
+  supabase.channel('pedidos-realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, (payload) => {
+      pedidos.unshift(payload.new);
+      carregarItensDoPedido(payload.new.id).then(() => { renderizar(); tocarNotificacao(); });
+    })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pedidos' }, (payload) => {
+      const idx = pedidos.findIndex(p => p.id === payload.new.id);
+      if (idx >= 0) pedidos[idx] = payload.new;
+      renderizar();
+    })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedido_itens' }, (payload) => {
+      const item = payload.new;
+      if (!itensPorPedido[item.pedido_id]) itensPorPedido[item.pedido_id] = [];
+      itensPorPedido[item.pedido_id].push(item);
+      renderizar();
+    })
+    .subscribe((status) => {
+      const dot = document.getElementById('dotStatus');
+      const txt = document.getElementById('statusTexto');
+      if (status === 'SUBSCRIBED') { dot.classList.remove('offline'); txt.textContent = 'Conectado em tempo real'; }
+      else { dot.classList.add('offline'); txt.textContent = 'Desconectado'; }
+    });
+}
+
+async function carregarItensDoPedido(pedidoId) {
+  const { data, error } = await supabase.from('pedido_itens').select('*').eq('pedido_id', pedidoId);
+  if (!error) itensPorPedido[pedidoId] = data || [];
+}
+
+function tocarNotificacao() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+    osc.start(); osc.stop(ctx.currentTime + 0.4);
+  } catch (e) {}
+}
+
+async function atualizarStatus(pedidoId, novoStatus) {
+  const updates = { status: novoStatus };
+  if (novoStatus === 'entregue') updates.entregue_em = new Date().toISOString();
+  const { error } = await supabase.from('pedidos').update(updates).eq('id', pedidoId);
+  if (error) alert('Erro ao atualizar: ' + error.message);
+}
+
+function renderizar() {
+  const grid = document.getElementById('gridPedidos');
+  let lista = filtroAtual === 'todos' ? pedidos : pedidos.filter(p => p.status === filtroAtual);
+
+  const hoje = new Date().toDateString();
+  document.getElementById('statPendente').textContent = pedidos.filter(p => p.status === 'pendente').length;
+  document.getElementById('statPreparo').textContent = pedidos.filter(p => p.status === 'em_preparo').length;
+  document.getElementById('statEntrega').textContent = pedidos.filter(p => p.status === 'saiu_entrega').length;
+  document.getElementById('statEntregue').textContent = pedidos.filter(p => p.status === 'entregue' && p.entregue_em && new Date(p.entregue_em).toDateString() === hoje).length;
+
+  if (lista.length === 0) {
+    grid.innerHTML = `<div class="vazio"><div class="emoji">📭</div><p>Nenhum pedido ${filtroAtual !== 'todos' ? 'neste status' : 'ainda'}</p></div>`;
+    return;
+  }
+  grid.innerHTML = lista.map(p => renderizarPedido(p)).join('');
+}
+
+function renderizarPedido(p) {
+  const itens = itensPorPedido[p.id] || [];
+  const data = new Date(p.criado_em);
+  const hora = data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const dia = data.toLocaleDateString('pt-BR');
+  const iniciais = (p.cliente_nome || '?').split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+
+  const botoes = [];
+  if (p.status === 'pendente') {
+    botoes.push(`<button class="btn btn-preparo" onclick="atualizarStatus('${p.id}', 'em_preparo')">👨‍🍳 Iniciar preparo</button>`);
+    botoes.push(`<button class="btn btn-cancelar" onclick="atualizarStatus('${p.id}', 'cancelado')">❌ Cancelar</button>`);
+  } else if (p.status === 'em_preparo') {
+    botoes.push(`<button class="btn btn-entrega" onclick="atualizarStatus('${p.id}', 'saiu_entrega')">🛵 Saiu p/ entrega</button>`);
+  } else if (p.status === 'saiu_entrega') {
+    botoes.push(`<button class="btn btn-entregue" onclick="atualizarStatus('${p.id}', 'entregue')">✅ Marcar como entregue</button>`);
+  } else if (p.status === 'entregue') {
+    botoes.push(`<button class="btn btn-preparo" disabled style="opacity:0.5;cursor:default;">✅ Entregue em ${p.entregue_em ? new Date(p.entregue_em).toLocaleString('pt-BR') : ''}</button>`);
+  }
+
+  return `
+    <div class="pedido">
+      <div class="pedido-header">
+        <span class="pedido-id">#${p.id.slice(0, 8)}</span>
+        <span class="badge ${p.status}">${traduzirStatus(p.status)}</span>
+      </div>
+      <div class="pedido-body">
+        <div class="cliente">
+          <div class="avatar">${iniciais}</div>
+          <div class="info">
+            <div class="nome">${p.cliente_nome || 'Cliente'}</div>
+            <div class="fone">📱 ${p.cliente_numero || '—'}</div>
+          </div>
+        </div>
+        ${p.endereco ? `<div class="campo"><span class="icone">📍</span><span class="valor"><strong>Endereço:</strong> ${p.endereco}</span></div>` : ''}
+        ${itens.length > 0 ? `
+          <div class="itens">
+            <h4>🛒 Itens do pedido</h4>
+            ${itens.map(i => `<div class="item"><span>${i.quantidade}x ${i.descricao}</span><span class="preco">R$ ${parseFloat(i.preco).toFixed(2).replace('.', ',')}</span></div>`).join('')}
+          </div>
+        ` : ''}
+        <div class="totais">
+          <div class="linha-total"><span>Subtotal</span><span class="val">R$ ${parseFloat(p.subtotal || 0).toFixed(2).replace('.', ',')}</span></div>
+          <div class="linha-total"><span>Taxa de entrega</span><span class="val">R$ ${parseFloat(p.taxa_entrega || 0).toFixed(2).replace('.', ',')}</span></div>
+          <div class="linha-total grande"><span>TOTAL</span><span class="val">R$ ${parseFloat(p.total || 0).toFixed(2).replace('.', ',')}</span></div>
+        </div>
+        <div class="campo" style="margin-top:8px;"><span class="icone">💳</span><span class="valor"><strong>Pagamento:</strong> ${p.forma_pagamento || '—'}</span></div>
+        <div class="campo"><span class="icone">🕒</span><span class="valor">${dia} às ${hora}</span></div>
+      </div>
+      <div class="acoes">${botoes.join('')}</div>
+    </div>
+  `;
+}
+
+function traduzirStatus(s) {
+  return { pendente: '⏳ Pendente', em_preparo: '👨‍🍳 Em preparo', saiu_entrega: '🛵 Saiu p/ entrega', entregue: '✅ Entregue', cancelado: '❌ Cancelado' }[s] || s;
+}
+
+document.querySelectorAll('.filtro').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filtro').forEach(b => b.classList.remove('ativo'));
+    btn.classList.add('ativo');
+    filtroAtual = btn.dataset.filtro;
+    renderizar();
+  });
+});
+
+carregarPedidos().then(() => configurarRealtime());
+setInterval(carregarPedidos, 30000);
+</script>
+</body>
+</html>
